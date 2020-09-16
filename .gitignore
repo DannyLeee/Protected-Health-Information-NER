@@ -1,3 +1,6 @@
 .vscode/
 raw_data/
 dataset/
+baseline.ipynb
+.*/
+__pycache__
