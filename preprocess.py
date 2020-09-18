@@ -1,17 +1,23 @@
 import json
 import numpy as np
 import torch
+import sys
+from transformers import BertTokenizer
+
 type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
              "ID":5, "profession" : 6, "biomarker":7, "family": 8,
              "clinical_event": 9, "special_skills":10, "unique_treatment":11,
              "account":12, "organization":13, "education":14, "money":15,
              "belonging_mark":16, "med_exam":17, "others":18}
-from transformers import BertTokenizer
+
+if (len(sys.argv) != 2):
+    print("usage: python3 preprocess.py {prerpocessed_file_name(without extension)}")
+    sys.exit(-1)
 PRETRAINED_LM = "hfl/chinese-bert-wwm"
 tokenizer = BertTokenizer.from_pretrained(PRETRAINED_LM)
 
 bert_data = []
-with open ('./dataset/sample.json', 'r') as json_file:
+with open ('./dataset/' + sys.argv[1] + '.json', 'r') as json_file:
     data_file = json.load(json_file)
     print("start preprocessing...")
     c = 0
@@ -23,7 +29,7 @@ with open ('./dataset/sample.json', 'r') as json_file:
             type_list.append(type_dict[item[4]])
         article = article.replace("醫師：", "[SEP]") \
         .replace("民眾：", "[SEP]").replace("家屬：", "[SEP]") \
-        .replace("個管師", "[SEP]").replace("護理師：", "[SEP]")
+        .replace("個管師：", "[SEP]").replace("護理師：", "[SEP]")
         tokens = tokenizer.tokenize(article)
         BIO_label = np.full(len(tokens), 2)
         type_label = np.full(len(tokens), 0)
@@ -64,7 +70,7 @@ with open ('./dataset/sample.json', 'r') as json_file:
         c += 1
         print("\rprocessed %d data" %c, end="")
     
-torch.save(bert_data, "./dataset/sample_bert_data.pt")
+torch.save(bert_data, "./dataset/" + sys.argv[1] + "_bert_data.pt")
 print("")
 
 """to length 512"""

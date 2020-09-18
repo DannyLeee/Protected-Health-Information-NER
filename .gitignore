@@ -4,3 +4,4 @@ dataset/
 baseline.ipynb
 .*/
 __pycache__
+model/
