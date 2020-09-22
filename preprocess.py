@@ -5,14 +5,15 @@ import sys
 from transformers import BertTokenizer
 
 type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
-             "ID":5, "profession" : 6, "biomarker":7, "family": 8,
-             "clinical_event": 9, "special_skills":10, "unique_treatment":11,
+             "ID":5, "profession":6, "biomarker":7, "family":8,
+             "clinical_event":9, "special_skills":10, "unique_treatment":11,
              "account":12, "organization":13, "education":14, "money":15,
              "belonging_mark":16, "med_exam":17, "others":18}
 
 if (len(sys.argv) != 2):
     print("usage: python3 preprocess.py {prerpocessed_file_name(without extension)}")
     sys.exit(-1)
+
 PRETRAINED_LM = "hfl/chinese-bert-wwm"
 tokenizer = BertTokenizer.from_pretrained(PRETRAINED_LM)
 
@@ -65,7 +66,8 @@ with open ('./dataset/' + sys.argv[1] + '.json', 'r') as json_file:
 
         ids = tokenizer.convert_tokens_to_ids(tokens)
 
-        pt_dict = {'input_ids':ids, "BIO_label":BIO_label, "type_label":type_label}
+        pt_dict = {'input_ids':ids, "BIO_label":BIO_label, "type_label":type_label,
+                    'article_id':data['id']}
         bert_data.append(pt_dict)
         c += 1
         print("\rprocessed %d data" %c, end="")
@@ -98,8 +100,9 @@ for data in bert_data:
                     type_512 = [0] + type_[pos : pos+i+1] + [0] * (512 - i - 2)
                     flag = 1 if (pos+i+1 == len(ids)) else 0
 
-                    pt_dict = {'input_ids':ids_512, "seg":seg_512, "att":att_512,
-                            "BIO_label":BIO_512, "type_label":type_512}
+                    pt_dict = {"input_ids":ids_512, "seg":seg_512, "att":att_512,
+                                "BIO_label":BIO_512, "type_label":type_512,
+                                "article_id":data['article_id']}
                     bert_data_512.append(pt_dict)
                     c_ += 1
                     print("\rprocessed %d data to length 512" %c_, end="")

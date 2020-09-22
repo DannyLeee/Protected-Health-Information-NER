@@ -5,3 +5,5 @@ baseline.ipynb
 .*/
 __pycache__
 model/
+baseline/
+result/

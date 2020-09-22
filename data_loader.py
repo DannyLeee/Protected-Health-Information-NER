@@ -10,17 +10,18 @@ class TalkDataset(Dataset):
         inputid = self.list_of_dict[idx]['input_ids']
         tokentype = self.list_of_dict[idx]['seg']
         attentionmask = self.list_of_dict[idx]['att']
+        id = self.list_of_dict[idx]['article_id']
         inputid = torch.tensor(inputid)
         tokentype = torch.tensor(tokentype)
         attentionmask = torch.tensor(attentionmask)
-        type_label = None
-        BIO_label = None
-        if (self.mode == "train"):
+        if (self.mode == "test"):
+            return inputid, tokentype, attentionmask, id
+        elif (self.mode == "train"):
             type_label = self.list_of_dict[idx]['type_label']
             BIO_label = self.list_of_dict[idx]['BIO_label']
             type_label = torch.tensor(type_label)
             BIO_label = torch.tensor(BIO_label)
-        return inputid, tokentype, attentionmask, type_label, BIO_label
+            return inputid, tokentype, attentionmask, type_label, BIO_label, id
     
     def __len__(self):
         return len(self.list_of_dict)
