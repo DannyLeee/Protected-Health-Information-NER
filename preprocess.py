@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import sys
 from transformers import BertTokenizer
+from random import sample
+from math import ceil
 
 type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
              "ID":5, "profession":6, "biomarker":7, "family":8,
@@ -10,8 +12,8 @@ type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
              "account":12, "organization":13, "education":14, "money":15,
              "belonging_mark":16, "med_exam":17, "others":18}
 
-if (len(sys.argv) != 2):
-    print("usage: python3 preprocess.py {prerpocessed_file_name(without extension)}")
+if (len(sys.argv) < 2):
+    print("usage: python3 preprocess.py {prerpocessed_file_name(without extension)} [testing_id_list]")
     sys.exit(-1)
 
 PRETRAINED_LM = "hfl/chinese-bert-wwm"
@@ -76,47 +78,71 @@ torch.save(bert_data, "./dataset/" + sys.argv[1] + "_bert_data.pt")
 print("")
 
 """to length 512"""
-bert_data_512 = []
+bert_data_train_512 = []
+bert_data_test_512 = []
 c = 0
-c_ = 0
+c1 = 0
+c2 = 0
+length = len(bert_data)
+try:
+    test_list = set(eval(sys.argv[2]))
+except:
+    test_list = sample(range(length), ceil(length * 0.33)) # split 1/3 testing data
+
+
 for data in bert_data:
     c += 1
     ids = data['input_ids']
     BIO = data['BIO_label']
     type_ = data['type_label']
     pos = 0
-    count_back = 0
     flag = 0
+    sep_pos = 0
+    new_pos = 0
     while (pos < len(ids)):
         ids_512 = ids[pos : pos+512]
+        count_back = 0
         for i in range(min(511, len(ids_512)-1), 0, -1):
             if (ids_512[i] == 102): # 102 = [SEP]
                 count_back += 1
                 if (count_back == 1):
-                    ids_512 = [101] + ids[pos : pos+i+1] + [0] * (512 - i - 2)
-                    seg_512 = [0] * 512
-                    att_512 = [1] * (i + 2) + [0] * (512 - i - 2)
-                    BIO_512 = [2] + BIO[pos : pos+i+1] + [2] * (512 - i - 2)
-                    type_512 = [0] + type_[pos : pos+i+1] + [0] * (512 - i - 2)
-                    flag = 1 if (pos+i+1 == len(ids)) else 0
+                    sep_pos = i
+                    new_pos = pos + i + 1
+                elif (count_back <= 3): # overlap n-1 sentences 
+                    new_pos = pos + i + 1
+        if(count_back == 0):
+            sep_pos = 510
+            new_pos = pos + 510 - 5 # overlap n tokens
 
-                    pt_dict = {"input_ids":ids_512, "seg":seg_512, "att":att_512,
-                                "BIO_label":BIO_512, "type_label":type_512,
-                                "article_id":data['article_id']}
-                    bert_data_512.append(pt_dict)
-                    c_ += 1
-                    print("\rprocessed %d data to length 512" %c_, end="")
+        ids_512 = [101] + ids[pos : pos+sep_pos+1] + [0] * (512 - sep_pos - 2)
+        seg_512 = [0] * 512
 
-                elif (count_back == 3): # overlap n-1 sentences 
-                    pos += i
-                    count_back = 0
-                    break
+        att_512 = [1] * (sep_pos + 2) + [0] * (512 - sep_pos - 2)
+        BIO_512 = [2] + BIO[pos : pos+sep_pos+1] + [2] * (512 - sep_pos - 2)
+        type_512 = [0] + type_[pos : pos+sep_pos+1] + [0] * (512 - sep_pos - 2)
+        flag = 1 if (pos+sep_pos+1 >= len(ids)) else 0
+        pos = new_pos
+
+        pt_dict = {"input_ids":ids_512, "seg":seg_512, "att":att_512,
+                    "BIO_label":BIO_512, "type_label":type_512,
+                    "article_id":data['article_id']}
+        if (data['article_id'] not in test_list):
+            bert_data_train_512.append(pt_dict)
+            c1 += 1
+        else:
+            bert_data_test_512.append(pt_dict)
+            c2 += 1
+        
+        print("\rprocessed %d data to length 512" %(c1+c2), end="")
+
         if (flag): # read single talk
             break
 
-torch.save(bert_data_512, "./dataset/sample_512_bert_data.pt")
+torch.save(bert_data_train_512, "./dataset/" + sys.argv[1] + "_train_512_bert_data.pt")
+torch.save(bert_data_test_512, "./dataset/" + sys.argv[1] + "_test_512_bert_data.pt")
 
 print("")
-print("processed %d origin datas to %d datas in length 512"
-    % (c, c_))
+print("processed %d origin datas to %d train datas and %d test datas in length 512"
+    % (c, c1, c2))
 print("Preprocess Done !!")
+print("Testing set id list: ", test_list)

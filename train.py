@@ -10,7 +10,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 BATCH_SIZE = 8
-data_path = "./dataset/sample_512_bert_data.pt"
+data_path = "./dataset/train_1_train_512_bert_data.pt"
 
 list_of_dict = torch.load(data_path)
 # list_of_dict = list_of_dict[:1] #############
@@ -24,12 +24,12 @@ print("device:", device)
 model = PHI_NER()
 optimizer = AdamW(model.parameters(), lr=1e-5) # AdamW = BertAdam
 
-BIO_weight = torch.FloatTensor([89.94618834, 50.65151515,  1.]).cuda()
-type_weight = torch.FloatTensor([1, 7.42883207e+02, 3.78451358e+02, 4.71952716e+01,
- 9.70063365e+07, 9.70063365e+07, 6.68553928e+03, 9.70063365e+07,
- 9.70063365e+07, 9.70063365e+07, 9.70063365e+07, 9.70063365e+07,
- 9.70063365e+07, 2.00575855e+03, 9.70063365e+07, 5.49531139e+02,
- 9.70063365e+07, 3.10975750e+02, 9.70063365e+07]).cuda()
+BIO_weight = torch.FloatTensor([98.33333333, 53.5694687,   1.        ]).cuda()
+type_weight = torch.FloatTensor([1.00000000e+00, 4.79372641e+02, 5.39595000e+02, 4.83475676e+01,
+4.38265956e+03, 1.13018437e+04, 4.99416203e+03, 9.71971425e+07,
+3.90457045e+03, 2.68375880e+04, 7.15339819e+04, 3.97687436e+03,
+9.71971425e+07, 1.07261502e+05, 3.57801575e+04, 1.07378815e+03,
+9.71971425e+07, 4.60856189e+02, 9.71971425e+07,]).cuda()
 
 BIO_loss_fct = nn.CrossEntropyLoss(weight=BIO_weight)
 type_loss_fct = nn.CrossEntropyLoss(weight=type_weight)
@@ -60,14 +60,9 @@ for epoch in range(EPOCHS):
     running_loss = 0.0
     type_running_loss = 0.0
     BIO_running_loss = 0.0
-    for data in trainLoader:
-#         for i, t in enumerate(data):
-#             data[i] = torch.reshape(t, (t.size(0) * t.size(1),512))
-#         print(data)
-#         print(data[0].size())
-#         break
-        
-        tokens_tensors, segments_tensors, masks_tensors,         type_label, BIO_label = [t.to(device) for t in data]
+    for data in trainLoader:        
+        tokens_tensors, segments_tensors, masks_tensors,    \
+        type_label, BIO_label = [t.to(device) for t in data]
 
         # 將參數梯度歸零
         optimizer.zero_grad()
@@ -79,12 +74,10 @@ for epoch in range(EPOCHS):
 
         type_pred = outputs[0]
         type_pred = torch.transpose(type_pred, 1, 2)
-    #     print(type_pred.size(), type_label.size())
         type_running_loss = type_loss_fct(type_pred, type_label)
 
         BIO_pred = outputs[1]
         BIO_pred = torch.transpose(BIO_pred, 1, 2)
-    #     print(BIO_pred.size(), BIO_label.size())
         BIO_loss = BIO_loss_fct(BIO_pred, BIO_label)
 
         loss = BIO_loss + type_running_loss
@@ -99,7 +92,7 @@ for epoch in range(EPOCHS):
         BIO_running_loss += BIO_loss.item()
 
     if ((epoch + 1) % 10 == 0): #####
-        CHECKPOINT_NAME = './model/smaple_E' + str(epoch + 1) + '.pt' ########################
+        CHECKPOINT_NAME = './model/train_1_E' + str(epoch + 1) + '.pt' ########################
         torch.save(model.state_dict(), CHECKPOINT_NAME)
 
         dt1 = datetime.utcnow().replace(tzinfo=timezone.utc)

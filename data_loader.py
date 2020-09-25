@@ -21,7 +21,7 @@ class TalkDataset(Dataset):
             BIO_label = self.list_of_dict[idx]['BIO_label']
             type_label = torch.tensor(type_label)
             BIO_label = torch.tensor(BIO_label)
-            return inputid, tokentype, attentionmask, type_label, BIO_label, id
+            return inputid, tokentype, attentionmask, type_label, BIO_label
     
     def __len__(self):
         return len(self.list_of_dict)

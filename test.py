@@ -16,7 +16,7 @@ type_dict = {0:"NONE", 1:"name", 2:"location", 3:"time", 4:"contact",
              12:"account", 13:"organization", 14:"education", 15:"money",
              16:"belonging_mark", 17:"med_exam", 18:"others"}
 
-FILE_PATH = "./dataset/sample_512_bert_data.pt"
+FILE_PATH = "./dataset/sample_test_512_bert_data.pt" ##########
 test_file = torch.load(FILE_PATH)
 # test_file = test_file[:1] ############
 
@@ -149,23 +149,3 @@ for p in predictions:
     df = df.append(temp, ignore_index=True)
 df = df.drop_duplicates()
 df.to_csv('./result/smaple.tsv', index=False, sep="\t")  ##########
-
-for i, p in enumerate(predictions):
-#     type_label = []
-#     BIO_text = []
-    ans = []
-    for j, b in enumerate(test_file[i]['BIO_label']):
-        if (b == 0):
-            start = j
-            end = j + 1
-            while (end < 512 and test_file[i]['BIO_label'][end] == 1):
-                end += 1
-#             type_label.append(type_dict[type_vote(test_file[i]['type_label'][start : end])])
-#             BIO_text.append(tokenizer.decode(token_ids = test_file[i]['input_ids'][start : end]).replace(" ", ""))
-            type_ = type_dict[type_vote(test_file[i]['type_label'][start : end])]
-            tgt = tokenizer.decode(token_ids = test_file[i]['input_ids'][start : end]).replace(" ", "")
-            ans.append([type_, tgt])
-    
-    print(ans)
-    print(p)
-    print("#####\n")
