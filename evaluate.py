@@ -30,12 +30,11 @@ json_file = open(ans_file, 'r')
 ans_dict = json.load(json_file)
 
 def BIO_tagging(tag_list, tag_info):
-    result = np.array(tag_list)
     for info in tag_info:
-        result[info[1]] = "B-" + info[4]
-        result[info[1]+1: info[2]] = "I-" + info[4]
-    result = result.tolist()
-    return result
+        tag_list[info[1]] = "B-" + info[4]
+        for i in range(info[1]+1, info[2]):
+            tag_list[i] = "I-" + info[4]
+    return
 
 id_set = set()
 id_list = []
@@ -47,9 +46,9 @@ for index, rows in df.iterrows():
         id_list.append(id)
         length = len(ans_dict[id]['article'])
         ans_BIO_list.append(['O'] * length)
-        ans_BIO_list[-1] = BIO_tagging(ans_BIO_list[-1], ans_dict[id]['item'])
+        BIO_tagging(ans_BIO_list[-1], ans_dict[id]['item'])
         pred_BIO_list.append(['O'] * length)
-        pred_BIO_list[-1] = BIO_tagging(pred_BIO_list[-1], pred_item)
+        BIO_tagging(pred_BIO_list[-1], pred_item)
     else:
         BIO_tagging(pred_BIO_list[-1], pred_item)
 
