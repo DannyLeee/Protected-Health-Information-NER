@@ -22,15 +22,7 @@ test_file = torch.load(FILE_PATH)
 
 PRETRAINED_LM = "hfl/chinese-bert-wwm"
 tokenizer = BertTokenizer.from_pretrained(PRETRAINED_LM)
-tokenizer.add_tokens(["…"])
-tokenizer.add_tokens(['痾'])
-tokenizer.add_tokens(['誒'])
-tokenizer.add_tokens(['擤'])
-tokenizer.add_tokens(['嵗'])
-tokenizer.add_tokens(['曡'])
-tokenizer.add_tokens(['厰'])
-tokenizer.add_tokens(['聼'])
-tokenizer.add_tokens(['柺'])
+tokenizer.add_tokens(['…', '痾', '誒', '擤', '嵗', '曡', '厰', '聼', '柺'])
 
 json_file = open('./dataset/development_1.json') #########
 data_file = json.load(json_file)
@@ -49,15 +41,6 @@ def type_vote(type_list):
 
 def get_position(id, span, text):
     start = 0
-    tpos = span.find(text)
-    sep = span.find("[SEP]", 0, tpos)
-    rsep = span.rfind("[SEP]", tpos)
-    if (sep!=-1 and rsep!=-1):
-        span = span[sep+5 : rsep]
-    elif (sep != -1):
-        span = span[sep+5:]
-    elif (rsep != -1):
-        span = span[:rsep]
     article = data_file[id]['article'].lower()
     start = article.find(span) + span.find(text)
     return start
@@ -72,7 +55,17 @@ def bio_2_string(tokens_tensors, type_pred, BIO_tagging, id):
                 end += 1
 
             tgt = tokenizer.decode(token_ids = tokens_tensors[start : end]).replace(' ', '')
-            span = tokenizer.decode(token_ids = tokens_tensors[start-3 : end+3]).replace(' ', '')
+            token_span = tokens_tensors[start : end]
+            for i in range(4):
+                if (tokens_tensors[end + i] == tokenizer.vocab['[SEP]']):
+                    token_span = torch.cat((token_span, tokens_tensors[end : end+i]), 0)
+                    break
+            for i in range(0, -4, -1):
+                if (tokens_tensors[start + i] == tokenizer.vocab['[SEP]']):
+                    temp = torch.tensor([tokenizer.vocab['：']]).to(device)
+                    token_span = torch.cat((temp, tokens_tensors[start+i+1 : start], token_span), 0)
+                    break
+            span = tokenizer.decode(token_ids = token_span).replace(' ', '')
             type_ = type_vote(type_pred[start : end])
             if (type_ != 0):
                 s_pos = get_position(id, span, tgt)
