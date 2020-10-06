@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-BATCH_SIZE = 8
+BATCH_SIZE = 4
 data_path = "./dataset/train_1_train_512_bert_data.pt"
 
 list_of_dict = torch.load(data_path)
@@ -52,7 +52,7 @@ from datetime import datetime,timezone,timedelta
 model = model.to(device)
 model.train()
 
-EPOCHS = 50
+EPOCHS = 10
 dt1 = datetime.utcnow().replace(tzinfo=timezone.utc)
 dt2 = dt1.astimezone(timezone(timedelta(hours=8))) # 轉換時區 -> 東八區
 print(dt2)
@@ -74,13 +74,13 @@ for epoch in range(EPOCHS):
 
         type_pred = outputs[0]
         type_pred = torch.transpose(type_pred, 1, 2)
-        type_running_loss = type_loss_fct(type_pred, type_label)
+        type_loss = type_loss_fct(type_pred, type_label)
 
         BIO_pred = outputs[1]
         BIO_pred = torch.transpose(BIO_pred, 1, 2)
         BIO_loss = BIO_loss_fct(BIO_pred, BIO_label)
 
-        loss = BIO_loss + type_running_loss
+        loss = BIO_loss + type_loss
 
         # backward
         loss.backward()
@@ -88,10 +88,10 @@ for epoch in range(EPOCHS):
 
         # 紀錄當前 batch loss
         running_loss += loss.item()
-        type_running_loss += type_running_loss.item()
+        type_running_loss += type_loss.item()
         BIO_running_loss += BIO_loss.item()
 
-    if ((epoch + 1) % 10 == 0): #####
+    if ((epoch + 1) % 10 == 0 or True): #####
         CHECKPOINT_NAME = './model/train_1_E' + str(epoch + 1) + '.pt' ########################
         torch.save(model.state_dict(), CHECKPOINT_NAME)
 

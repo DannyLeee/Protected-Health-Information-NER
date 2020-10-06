@@ -9,6 +9,7 @@ class PHI_NER(nn.Module):
     def __init__(self):
         super(PHI_NER, self).__init__()
         self.bert = BertModel.from_pretrained(PRETRAINED_LM, output_hidden_states=True)
+        self.bert.resize_token_embeddings(self.bert.config.vocab_size + 9)
         self.type_classifier = nn.Linear(self.bert.config.hidden_size, 19) # type
         self.BIO_classifier = nn.Linear(self.bert.config.hidden_size, 3) # BIO tagging
         self.softmax = nn.Softmax(-1)

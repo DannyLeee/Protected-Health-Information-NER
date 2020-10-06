@@ -16,16 +16,23 @@ type_dict = {0:"NONE", 1:"name", 2:"location", 3:"time", 4:"contact",
              12:"account", 13:"organization", 14:"education", 15:"money",
              16:"belonging_mark", 17:"med_exam", 18:"others"}
 
-FILE_PATH = "./dataset/sample_test_512_bert_data.pt" ##########
+FILE_PATH = "./dataset/development_1_test_512_bert_data.pt" ##########
 test_file = torch.load(FILE_PATH)
 # test_file = test_file[:1] ############
 
 PRETRAINED_LM = "hfl/chinese-bert-wwm"
 tokenizer = BertTokenizer.from_pretrained(PRETRAINED_LM)
+tokenizer.add_tokens(["…"])
+tokenizer.add_tokens(['痾'])
+tokenizer.add_tokens(['誒'])
+tokenizer.add_tokens(['擤'])
+tokenizer.add_tokens(['嵗'])
+tokenizer.add_tokens(['曡'])
+tokenizer.add_tokens(['厰'])
+tokenizer.add_tokens(['聼'])
+tokenizer.add_tokens(['柺'])
 
-len(test_file)
-
-json_file = open('./dataset/sample.json')
+json_file = open('./dataset/development_1.json') #########
 data_file = json.load(json_file)
 
 """
@@ -56,10 +63,6 @@ def get_position(id, span, text):
     return start
 
 def bio_2_string(tokens_tensors, type_pred, BIO_tagging, id):
-#     result_type = []
-#     result_text = []
-#     start_pos = []
-#     end_pos = []
     result = []
     for j in range(1, 512):
         if (BIO_tagging[j] == 0):
@@ -72,19 +75,10 @@ def bio_2_string(tokens_tensors, type_pred, BIO_tagging, id):
             span = tokenizer.decode(token_ids = tokens_tensors[start-3 : end+3]).replace(' ', '')
             type_ = type_vote(type_pred[start : end])
             if (type_ != 0):
-#                 result_type.append(type_dict[type_])
-#                 result_text.append(tgt)
                 s_pos = get_position(id, span, tgt)
-#                 print(span)
-#                 print(tgt)
-#                 print("---")
-#                 start_pos.append(s_pos)
-#                 end_pos.append(s_pos + len(tgt))
                 result.append([id, s_pos, s_pos+len(tgt), tgt, type_dict[type_]])
-#             print(s)
             start = end
 
-    # print('---')
     return result
 
 def get_predictions(model, testLoader, BATCH_SIZE):
@@ -92,12 +86,6 @@ def get_predictions(model, testLoader, BATCH_SIZE):
     total_count = 0 # 第n筆data
     with torch.no_grad():
         for data in testLoader:
-#             for i, t in enumerate(data):
-#                 data[i] = torch.reshape(t, (t.size(0) * t.size(1),512))
-#                 BATCH_SIZE = t.size(0) * t.size(1)
-#             print(data)
-#             print(data[0].size())
-#             break
             # 將所有 tensors 移到 GPU 上
             if next(model.parameters()).is_cuda:
                 data = [t.to("cuda:0") for t in data if t is not None]
@@ -110,23 +98,17 @@ def get_predictions(model, testLoader, BATCH_SIZE):
                       token_type_ids=segments_tensors, 
                       attention_mask=masks_tensors)
 
-#             count = min(outputs[0].shape[0], BATCH_SIZE)
             for i in range(outputs[0].shape[0]):  # run batchsize times
                 type_pred = outputs[0][i].argmax(1) # 19*512 into class label
                 BIO_pred = outputs[1][i].argmax(1) # 3*512 into class label
-#                 print(type_pred)
-#                 print(BIO_pred)
                 text_token = tokens_tensors[i]
                 r = bio_2_string(text_token, type_pred, BIO_pred, ids[i].item())
                 result.append(r)
                 total_count += 1
-                # break
-                # print(result)
-#             break
     return result
 
 """testing"""
-MODEL_PATH = "./model/smaple_E10.pt" ##############
+MODEL_PATH = "./model/train_1_E10.pt" ##############
 # MODEL_PATH = "./model/test_E500.pt"
 
 model = PHI_NER()
@@ -148,4 +130,4 @@ for p in predictions:
     temp = pd.DataFrame(p, columns=h)
     df = df.append(temp, ignore_index=True)
 df = df.drop_duplicates()
-df.to_csv('./result/smaple.tsv', index=False, sep="\t")  ##########
+df.to_csv('./result/development_1.tsv', index=False, sep="\t")  ##########
