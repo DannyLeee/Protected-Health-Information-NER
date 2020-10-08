@@ -9,6 +9,8 @@ from model_budling import PHI_NER
 from transformers import BertTokenizer
 import json
 import pandas as pd
+from tqdm import tqdm
+import argparse
 
 type_dict = {0:"NONE", 1:"name", 2:"location", 3:"time", 4:"contact",
              5:"ID", 6:"profession", 7:"biomarker", 8:"family",
@@ -16,15 +18,21 @@ type_dict = {0:"NONE", 1:"name", 2:"location", 3:"time", 4:"contact",
              12:"account", 13:"organization", 14:"education", 15:"money",
              16:"belonging_mark", 17:"med_exam", 18:"others"}
 
-FILE_PATH = "./dataset/development_1_test_512_bert_data.pt" ##########
-test_file = torch.load(FILE_PATH)
-# test_file = test_file[:1] ############
+parser = argparse.ArgumentParser()
+parser.add_argument("-data_path", type=str, required=True)
+parser.add_argument("-json_path", type=str, required=True)
+parser.add_argument("-pretrained_lm", default="hfl/chinese-bert-wwm", type=str)
+parser.add_argument("-batch_size", default=16, type=int)
+parser.add_argument("-model_path", type=str, required=True)
+parser.add_argument("-result_path", type=str, required=True)
+args = parser.parse_args()
 
-PRETRAINED_LM = "hfl/chinese-bert-wwm"
-tokenizer = BertTokenizer.from_pretrained(PRETRAINED_LM)
+test_file = torch.load(args.data_path)
+
+tokenizer = BertTokenizer.from_pretrained(args.pretrained_lm)
 tokenizer.add_tokens(['…', '痾', '誒', '擤', '嵗', '曡', '厰', '聼', '柺'])
 
-json_file = open('./dataset/development_1.json') #########
+json_file = open(args.json_path)
 data_file = json.load(json_file)
 
 """
@@ -78,7 +86,7 @@ def get_predictions(model, testLoader, BATCH_SIZE):
     result = []
     total_count = 0 # 第n筆data
     with torch.no_grad():
-        for data in testLoader:
+        for data in tqdm(testLoader):
             # 將所有 tensors 移到 GPU 上
             if next(model.parameters()).is_cuda:
                 data = [t.to("cuda:0") for t in data if t is not None]
@@ -101,21 +109,17 @@ def get_predictions(model, testLoader, BATCH_SIZE):
     return result
 
 """testing"""
-MODEL_PATH = "./model/train_1_E10.pt" ##############
-# MODEL_PATH = "./model/test_E500.pt"
-
-model = PHI_NER()
-model.load_state_dict(torch.load(MODEL_PATH))
+model = PHI_NER(args.pretrained_lm)
+model.load_state_dict(torch.load(args.model_path))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print("device: ", device)
 model = model.to(device)
 model.eval()
-
-BATCH_SIZE = 6
 testSet = TalkDataset("test", test_file)
-testLoader = DataLoader(testSet, batch_size=BATCH_SIZE)
+testLoader = DataLoader(testSet, batch_size=args.batch_size)
 
 
-predictions = get_predictions(model, testLoader, BATCH_SIZE)
+predictions = get_predictions(model, testLoader, args.batch_size)
 
 h = ["article_id", "start_position", "end_position", "entity_text", "entity_type"]
 df = pd.DataFrame(columns=h)
@@ -123,4 +127,4 @@ for p in predictions:
     temp = pd.DataFrame(p, columns=h)
     df = df.append(temp, ignore_index=True)
 df = df.drop_duplicates()
-df.to_csv('./result/development_1.tsv', index=False, sep="\t")  ##########
+df.to_csv(args.result_path + '.tsv', index=False, sep="\t")

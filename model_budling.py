@@ -3,10 +3,8 @@ from transformers import BertModel
 import torch
 import torch.nn as nn
 
-PRETRAINED_LM = "hfl/chinese-bert-wwm"
-
 class PHI_NER(nn.Module):
-    def __init__(self):
+    def __init__(self, PRETRAINED_LM):
         super(PHI_NER, self).__init__()
         self.bert = BertModel.from_pretrained(PRETRAINED_LM, output_hidden_states=True)
         self.bert.resize_token_embeddings(self.bert.config.vocab_size + 9)

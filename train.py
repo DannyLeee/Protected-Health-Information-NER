@@ -8,20 +8,31 @@ from model_budling import PHI_NER
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import argparse
 
-BATCH_SIZE = 4
-data_path = "./dataset/train_1_train_512_bert_data.pt"
+parser = argparse.ArgumentParser()
+parser.add_argument("-data_path", type=str, required=True)
+parser.add_argument("-pretrained_lm", default="hfl/chinese-bert-wwm", type=str)
+parser.add_argument("-mode", default="train", type=str, choices=['train','dev'])
+parser.add_argument("-batch_size", default=8, type=int)
+parser.add_argument("-model_path", type=str, required=True)
+parser.add_argument("-epoch", default=10, type=int)
+parser.add_argument("-save_every", default=1, type=int)
+args = parser.parse_args()
 
-list_of_dict = torch.load(data_path)
-# list_of_dict = list_of_dict[:1] #############
-# train_list = list_of_dict[:80]
+"""load data"""
+list_of_dict = torch.load(args.data_path)
+
+if (args.mode == "dev"):
+    data_path = args.data_path.replace("train_512", "test_512")
+    list_of_dict += torch.load(data_path)
 
 """ model setting (training)"""
 trainSet = TalkDataset("train", list_of_dict)
-trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE)
+trainLoader = DataLoader(trainSet, batch_size=args.batch_size)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("device:", device)
-model = PHI_NER()
+model = PHI_NER(args.pretrained_lm)
 optimizer = AdamW(model.parameters(), lr=1e-5) # AdamW = BertAdam
 
 BIO_weight = torch.FloatTensor([98.33333333, 53.5694687,   1.        ]).cuda()
@@ -52,11 +63,10 @@ from datetime import datetime,timezone,timedelta
 model = model.to(device)
 model.train()
 
-EPOCHS = 10
 dt1 = datetime.utcnow().replace(tzinfo=timezone.utc)
 dt2 = dt1.astimezone(timezone(timedelta(hours=8))) # 轉換時區 -> 東八區
 print(dt2)
-for epoch in range(EPOCHS):
+for epoch in range(args.epoch):
     running_loss = 0.0
     type_running_loss = 0.0
     BIO_running_loss = 0.0
@@ -91,11 +101,11 @@ for epoch in range(EPOCHS):
         type_running_loss += type_loss.item()
         BIO_running_loss += BIO_loss.item()
 
-    if ((epoch + 1) % 10 == 0 or True): #####
-        CHECKPOINT_NAME = './model/train_1_E' + str(epoch + 1) + '.pt' ########################
+    if ((epoch + 1) % args.save_every == 0):
+        CHECKPOINT_NAME = args.model_path + '_E' + str(epoch + 1) + '.pt'
         torch.save(model.state_dict(), CHECKPOINT_NAME)
 
         dt1 = datetime.utcnow().replace(tzinfo=timezone.utc)
         dt2 = dt1.astimezone(timezone(timedelta(hours=8))) # 轉換時區 -> 東八區
-        print('%s\t[epoch %d] loss: %.3f, type_loss: %.3f, BIO_loss: %.3f' %
+        print('%.19s\t[epoch %d] loss: %.3f, type_loss: %.3f, BIO_loss: %.3f' %
               (dt2, epoch + 1, running_loss, type_running_loss, BIO_running_loss))

@@ -7,3 +7,5 @@ __pycache__
 model/
 baseline/
 result/
+final_model/
+bertwwm_pretrain_aicup/

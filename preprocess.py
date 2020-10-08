@@ -6,6 +6,7 @@ from transformers import BertTokenizer
 from random import sample
 from math import ceil
 from tqdm import tqdm
+import argparse
 
 type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
              "ID":5, "profession":6, "biomarker":7, "family":8,
@@ -13,25 +14,26 @@ type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
              "account":12, "organization":13, "education":14, "money":15,
              "belonging_mark":16, "med_exam":17, "others":18}
 
-if (len(sys.argv) < 3):
-    print("usage: python3 preprocess.py {mode} {prerpocessed_file_name(without extension)} [testing_id_list]")
-    sys.exit(-1)
-mode = sys.argv[1]
-assert mode in ["train", "dev"]
+parser = argparse.ArgumentParser()
+parser.add_argument("-mode", type=str, choices=['train','dev'], required=True)
+parser.add_argument("-file_name", type=str, required=True, help="prerpocessed file name (without extension)")
+parser.add_argument("-pretrained_lm", type=str, default="hfl/chinese-bert-wwm")
+parser.add_argument("-test_list", type=str, default="[]", help="will overwrite test_percent")
+parser.add_argument("-test_percent", type=float, default=0.33)
+args = parser.parse_args()
 
 print("\rloading pretrained language model ...", end='')
-PRETRAINED_LM = "hfl/chinese-bert-wwm"
-tokenizer = BertTokenizer.from_pretrained(PRETRAINED_LM)
+tokenizer = BertTokenizer.from_pretrained(args.pretrained_lm)
 tokenizer.add_tokens(['…', '痾', '誒', '擤', '嵗', '曡', '厰', '聼', '柺'])
 
 bert_data = []
-with open ('./dataset/' + sys.argv[2] + '.json', 'r') as json_file:
+with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
     data_file = json.load(json_file)
     print("\rstart preprocessing ...              ")
     c = 0
     for data in tqdm(data_file):
         article = data['article']
-        if (mode == "train"):
+        if (args.mode == "train"):
             type_list = []
             for i, item in enumerate(data['item']):
                 article = article[:item[1] + i*2] + "_" + item[3] + "_" + article[item[2] + i*2:]
@@ -40,7 +42,7 @@ with open ('./dataset/' + sys.argv[2] + '.json', 'r') as json_file:
         .replace("民眾：", "[SEP]").replace("家屬：", "[SEP]") \
         .replace("個管師：", "[SEP]").replace("護理師：", "[SEP]")
         tokens = tokenizer.tokenize(article)
-        if (mode == "train"):
+        if (args.mode == "train"):
             BIO_label = np.full(len(tokens), 2)
             type_label = np.full(len(tokens), 0)
             count_back = 0
@@ -69,16 +71,16 @@ with open ('./dataset/' + sys.argv[2] + '.json', 'r') as json_file:
         # tokens[0] = "[CLS]"
         if (tokens[0] == "[SEP]"):
             del tokens[0]
-            if (mode == "train"):
+            if (args.mode == "train"):
                 del BIO_label[0], type_label[0]
         tokens.append("[SEP]")
-        if (mode == "train"):
+        if (args.mode == "train"):
             BIO_label.append(2)
             type_label.append(0)
 
         ids = tokenizer.convert_tokens_to_ids(tokens)
 
-        if (mode == "train"):
+        if (args.mode == "train"):
             pt_dict = {'input_ids':ids, "BIO_label":BIO_label, "type_label":type_label,
                         'article_id':data['id']}
         else:
@@ -87,7 +89,7 @@ with open ('./dataset/' + sys.argv[2] + '.json', 'r') as json_file:
         c += 1
         print("\rprocessed %d data" %c, end="")
     
-torch.save(bert_data, "./dataset/" + sys.argv[2] + "_bert_data.pt")
+torch.save(bert_data, "./dataset/" + args.file_name + "_bert_data.pt")
 print("")
 
 """to length 512"""
@@ -97,16 +99,12 @@ c = 0
 c1 = 0
 c2 = 0
 length = len(bert_data)
-try:
-    test_list = set(eval(sys.argv[3]))
-except:
-    test_list = sample(range(length), ceil(length * 0.33)) # split 1/3 testing data
-
+test_list = set(eval(args.test_list)) if args.test_list != "[]" else sample(range(length), ceil(length * args.test_percent))
 
 for data in tqdm(bert_data):
     c += 1
     ids = data['input_ids']
-    if (mode == "train"):
+    if (args.mode == "train"):
         BIO = data['BIO_label']
         type_ = data['type_label']
     pos = 0
@@ -132,13 +130,13 @@ for data in tqdm(bert_data):
         seg_512 = [0] * 512
 
         att_512 = [1] * (sep_pos + 2) + [0] * (512 - sep_pos - 2)
-        if (mode == "train"):
+        if (args.mode == "train"):
             BIO_512 = [2] + BIO[pos : pos+sep_pos+1] + [2] * (512 - sep_pos - 2)
             type_512 = [0] + type_[pos : pos+sep_pos+1] + [0] * (512 - sep_pos - 2)
         flag = 1 if (pos+sep_pos+1 >= len(ids)) else 0
         pos = new_pos
 
-        if (mode == "train"):
+        if (args.mode == "train"):
             pt_dict = {"input_ids":ids_512, "seg":seg_512, "att":att_512,
                         "BIO_label":BIO_512, "type_label":type_512,
                         "article_id":data['article_id']}
@@ -146,7 +144,7 @@ for data in tqdm(bert_data):
             pt_dict = {"input_ids":ids_512, "seg":seg_512, "att":att_512,
                         "article_id":data['article_id']}
 
-        if (data['article_id'] not in test_list and mode=="train"):
+        if (data['article_id'] not in test_list and args.mode=="train"):
             bert_data_train_512.append(pt_dict)
             c1 += 1
         else:
@@ -158,8 +156,8 @@ for data in tqdm(bert_data):
         if (flag): # read single talk
             break
 
-torch.save(bert_data_train_512, "./dataset/" + sys.argv[2] + "_train_512_bert_data.pt")
-torch.save(bert_data_test_512, "./dataset/" + sys.argv[2] + "_test_512_bert_data.pt")
+torch.save(bert_data_train_512, "./dataset/" + args.file_name + "_train_512_bert_data.pt")
+torch.save(bert_data_test_512, "./dataset/" + args.file_name + "_test_512_bert_data.pt")
 
 print("")
 print("processed %d origin datas to %d train datas and %d test datas in length 512"
