@@ -24,7 +24,7 @@ parser.add_argument("-json_path", type=str, required=True)
 parser.add_argument("-pretrained_lm", default="hfl/chinese-bert-wwm", type=str)
 parser.add_argument("-batch_size", default=16, type=int)
 parser.add_argument("-model_path", type=str, required=True)
-parser.add_argument("-result_path", type=str, required=True)
+parser.add_argument("-result_path", type=str, required=True, help="destenation path without extension")
 args = parser.parse_args()
 
 test_file = torch.load(args.data_path)
