@@ -12,12 +12,14 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-data_path", type=str, required=True)
-parser.add_argument("-pretrained_lm", default="hfl/chinese-bert-wwm", type=str)
+parser.add_argument("-lm", default="hfl/chinese-bert-wwm", type=str)
 parser.add_argument("-mode", default="train", type=str, choices=['train','dev'])
 parser.add_argument("-batch_size", default=8, type=int)
 parser.add_argument("-model_path", type=str, required=True)
 parser.add_argument("-epoch", default=10, type=int)
 parser.add_argument("-save_every", default=1, type=int)
+parser.add_argument("-lr", default=1e-5, type=float)
+parser.add_argument("-train_from", default="", type=str)
 args = parser.parse_args()
 
 """load data"""
@@ -32,8 +34,8 @@ trainSet = TalkDataset("train", list_of_dict)
 trainLoader = DataLoader(trainSet, batch_size=args.batch_size)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("device:", device)
-model = PHI_NER(args.pretrained_lm)
-optimizer = AdamW(model.parameters(), lr=1e-5) # AdamW = BertAdam
+model = PHI_NER(args.lm)
+optimizer = AdamW(model.parameters(), lr=args.lr) # AdamW = BertAdam
 
 BIO_weight = torch.FloatTensor([98.33333333, 53.5694687,   1.        ]).cuda()
 type_weight = torch.FloatTensor([1.00000000e+00, 4.79372641e+02, 5.39595000e+02, 4.83475676e+01,
@@ -59,6 +61,11 @@ for name, module in model.named_children():
 
 """ training """
 from datetime import datetime,timezone,timedelta
+
+_from = 0
+if (args.train_from != ""):
+    model.load_state_dict(torch.load(args.train_from))
+    _from = int(args.train_from.split('_')[-1][1:-3])
 
 model = model.to(device)
 model.train()
@@ -102,7 +109,7 @@ for epoch in range(args.epoch):
         BIO_running_loss += BIO_loss.item()
 
     if ((epoch + 1) % args.save_every == 0):
-        CHECKPOINT_NAME = args.model_path + '_E' + str(epoch + 1) + '.pt'
+        CHECKPOINT_NAME = args.model_path + '_E' + str(_from + epoch + 1) + '.pt'
         torch.save(model.state_dict(), CHECKPOINT_NAME)
 
         dt1 = datetime.utcnow().replace(tzinfo=timezone.utc)

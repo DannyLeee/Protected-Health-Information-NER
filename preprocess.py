@@ -16,6 +16,8 @@ type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-mode", type=str, choices=['train','dev'], required=True)
+parser.add_argument("-sep_mode", type=str, default="replace", choices=['replace', 'add'])
+parser.add_argument("-seg_mode", type=int, default=0, choices=[0,1])
 parser.add_argument("-file_name", type=str, required=True, help="prerpocessed file name (without extension)")
 parser.add_argument("-pretrained_lm", type=str, default="hfl/chinese-bert-wwm")
 parser.add_argument("-test_list", type=str, default="[]", help="will overwrite test_percent")
@@ -38,9 +40,17 @@ with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
             for i, item in enumerate(data['item']):
                 article = article[:item[1] + i*2] + "_" + item[3] + "_" + article[item[2] + i*2:]
                 type_list.append(type_dict[item[4]])
-        article = article.replace("醫師：", "[SEP]") \
-        .replace("民眾：", "[SEP]").replace("家屬：", "[SEP]") \
-        .replace("個管師：", "[SEP]").replace("護理師：", "[SEP]")
+        if (args.sep_mode == "replace"):
+            article = article.replace("醫師：", "[SEP]") \
+            .replace("民眾：", "[SEP]").replace("家屬：", "[SEP]") \
+            .replace("家屬1：", "[SEP]").replace("家屬2：", "[SEP]") \
+            .replace("個管師：", "[SEP]").replace("護理師：", "[SEP]")
+        elif (args.sep_mode == "add"):
+            article = article = article.replace("醫師：", "[SEP]醫師：") \
+            .replace("民眾：", "[SEP]民眾：").replace("家屬：", "[SEP]家屬：") \
+            .replace("家屬1：", "[SEP]家屬1：").replace("家屬2：", "[SEP]家屬2：") \
+            .replace("個管師：", "[SEP]個管師：").replace("護理師：", "[SEP]護理師：")
+
         tokens = tokenizer.tokenize(article)
         if (args.mode == "train"):
             BIO_label = np.full(len(tokens), 2)
@@ -128,6 +138,18 @@ for data in tqdm(bert_data):
 
         ids_512 = [101] + ids[pos : pos+sep_pos+1] + [0] * (512 - sep_pos - 2)
         seg_512 = [0] * 512
+        if (args.seg_mode == 1):
+            i = 0
+            flag = 0
+            while (i < 512):
+                if (ids_512[i] == tokenizer.vocab['醫'] or ids_512[i] == tokenizer.vocab['個'] \
+                    or ids_512[i] == tokenizer.vocab['護']):
+                    flag = 0
+                elif (ids_512[i] == tokenizer.vocab['民'] or ids_512[i] == tokenizer.vocab['家']):
+                    flag = 1
+                seg_512[i] = flag
+                i += 1
+            
 
         att_512 = [1] * (sep_pos + 2) + [0] * (512 - sep_pos - 2)
         if (args.mode == "train"):

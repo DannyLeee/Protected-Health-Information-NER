@@ -21,7 +21,7 @@ type_dict = {0:"NONE", 1:"name", 2:"location", 3:"time", 4:"contact",
 parser = argparse.ArgumentParser()
 parser.add_argument("-data_path", type=str, required=True)
 parser.add_argument("-json_path", type=str, required=True)
-parser.add_argument("-pretrained_lm", default="hfl/chinese-bert-wwm", type=str)
+parser.add_argument("-lm", default="hfl/chinese-bert-wwm", type=str)
 parser.add_argument("-batch_size", default=16, type=int)
 parser.add_argument("-model_path", type=str, required=True)
 parser.add_argument("-result_path", type=str, required=True, help="destenation path without extension")
@@ -29,7 +29,7 @@ args = parser.parse_args()
 
 test_file = torch.load(args.data_path)
 
-tokenizer = BertTokenizer.from_pretrained(args.pretrained_lm)
+tokenizer = BertTokenizer.from_pretrained(args.lm)
 tokenizer.add_tokens(['…', '痾', '誒', '擤', '嵗', '曡', '厰', '聼', '柺'])
 
 json_file = open(args.json_path)
@@ -65,10 +65,14 @@ def bio_2_string(tokens_tensors, type_pred, BIO_tagging, id):
             tgt = tokenizer.decode(token_ids = tokens_tensors[start : end]).replace(' ', '')
             token_span = tokens_tensors[start : end]
             for i in range(4):
+                if (end + i >= 512):
+                    break
                 if (tokens_tensors[end + i] == tokenizer.vocab['[SEP]']):
                     token_span = torch.cat((token_span, tokens_tensors[end : end+i]), 0)
                     break
             for i in range(0, -4, -1):
+                if (end + i <= 0):
+                    break
                 if (tokens_tensors[start + i] == tokenizer.vocab['[SEP]']):
                     temp = torch.tensor([tokenizer.vocab['：']]).to(device)
                     token_span = torch.cat((temp, tokens_tensors[start+i+1 : start], token_span), 0)
@@ -109,7 +113,7 @@ def get_predictions(model, testLoader, BATCH_SIZE):
     return result
 
 """testing"""
-model = PHI_NER(args.pretrained_lm)
+model = PHI_NER(args.lm)
 model.load_state_dict(torch.load(args.model_path))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("device: ", device)
