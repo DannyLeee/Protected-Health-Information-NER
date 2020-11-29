@@ -1,15 +1,16 @@
 import json
 import sys
+import argparse
 
-if (len(sys.argv) != 4):
-	print("usage: python preprocess_to_json.py {mode} {src_file_path} {des_file_path}")
-	exit(-1)
+parser = argparse.ArgumentParser()
+parser.add_argument("-mode", type=str, choices=['train', 'dev', 'test'], default="train")
+parser.add_argument("-sourse_path", type=str, required=True, help="raw data (.txt)")
+parser.add_argument("-des_path", type=str, required=True, help="output data (.json)")
+args = parser.parse_args()
 
-mode = sys.argv[1]
-sourse_filename = sys.argv[2]
-des_filename = sys.argv[3]
-
-assert mode in ['train', 'dev', 'test']
+mode = args.mode
+sourse_filename = args.sourse_path
+des_filename = args.des_path
 
 result = []
 flag = 0
