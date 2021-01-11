@@ -2,7 +2,7 @@ import json
 import numpy as np
 import torch
 import sys
-from transformers import BertTokenizer
+from transformers import AutoTokenizer
 from random import sample
 from math import ceil
 from tqdm import tqdm
@@ -15,18 +15,22 @@ type_dict = {"none":0, "name":1, "location":2, "time":3, "contact":4,
              "belonging_mark":16, "med_exam":17, "others":18}
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-mode", type=str, choices=['train','dev'], required=True)
-parser.add_argument("-sep_mode", type=str, default="replace", choices=['replace', 'add'])
-parser.add_argument("-seg_mode", type=int, default=0, choices=[0,1])
+parser.add_argument("-mode", type=str, choices=['train','dev'], default="train")
+parser.add_argument("-sep_mode", type=str, default="add", choices=['replace', 'add'])
+parser.add_argument("-seg_mode", type=int, default=1, choices=[0,1])
 parser.add_argument("-file_name", type=str, required=True, help="prerpocessed file name (without extension)")
-parser.add_argument("-pretrained_lm", type=str, default="hfl/chinese-bert-wwm")
+parser.add_argument("-lm", type=str, default="hfl/chinese-bert-wwm")
 parser.add_argument("-test_list", type=str, default="[]", help="will overwrite test_percent")
 parser.add_argument("-test_percent", type=float, default=0.33)
 args = parser.parse_args()
 
 print("\rloading pretrained language model ...", end='')
-tokenizer = BertTokenizer.from_pretrained(args.pretrained_lm)
-tokenizer.add_tokens(['…', '痾', '誒', '擤', '嵗', '曡', '厰', '聼', '柺'])
+tokenizer = AutoTokenizer.from_pretrained(args.lm)
+tokenizer.add_tokens(['…', '痾', '誒', '擤', '嵗', '曡', '厰', '聼', '柺', '齁'])
+
+special_tokens = {"SEP":tokenizer.sep_token, "CLS":tokenizer.cls_token, "PAD":tokenizer.pad_token}
+def vocab(s):
+    return tokenizer.convert_tokens_to_ids(s)
 
 bert_data = []
 with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
@@ -38,18 +42,18 @@ with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
         if (args.mode == "train"):
             type_list = []
             for i, item in enumerate(data['item']):
-                article = article[:item[1] + i*2] + "_" + item[3] + "_" + article[item[2] + i*2:]
+                article = article[:item[1] + i*2] + "#" + item[3] + "#" + article[item[2] + i*2:]
                 type_list.append(type_dict[item[4]])
         if (args.sep_mode == "replace"):
-            article = article.replace("醫師：", "[SEP]") \
-            .replace("民眾：", "[SEP]").replace("家屬：", "[SEP]") \
-            .replace("家屬1：", "[SEP]").replace("家屬2：", "[SEP]") \
-            .replace("個管師：", "[SEP]").replace("護理師：", "[SEP]")
+            article = article.replace("醫師：", special_tokens["SEP"]) \
+            .replace("民眾：", special_tokens["SEP"]).replace("家屬：", special_tokens["SEP"]) \
+            .replace("家屬1：", special_tokens["SEP"]).replace("家屬2：", special_tokens["SEP"]) \
+            .replace("個管師：", special_tokens["SEP"]).replace("護理師：", special_tokens["SEP"])
         elif (args.sep_mode == "add"):
-            article = article = article.replace("醫師：", "[SEP]醫師：") \
-            .replace("民眾：", "[SEP]民眾：").replace("家屬：", "[SEP]家屬：") \
-            .replace("家屬1：", "[SEP]家屬1：").replace("家屬2：", "[SEP]家屬2：") \
-            .replace("個管師：", "[SEP]個管師：").replace("護理師：", "[SEP]護理師：")
+            article = article.replace("醫師：", f"{special_tokens['SEP']}醫師：") \
+            .replace("民眾：", f"{special_tokens['SEP']}民眾：").replace("家屬：", f"{special_tokens['SEP']}家屬：") \
+            .replace("家屬1：", f"{special_tokens['SEP']}家屬1：").replace("家屬2：", f"{special_tokens['SEP']}家屬2：") \
+            .replace("個管師：", f"{special_tokens['SEP']}個管師：").replace("護理師：", f"{special_tokens['SEP']}護理師：")
 
         tokens = tokenizer.tokenize(article)
         if (args.mode == "train"):
@@ -60,12 +64,12 @@ with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
             j = 0
             remove_list = []
             for i in range(len(tokens)):
-                if (tokens[i] == '_'):
+                if (tokens[i] == '#'):
                     remove_list.append(i)
-                    if (count_back == 0):
+                    if (count_back == 0):   # first #
                         begin = i+1
                         count_back += 1
-                    else:
+                    else:                   # second #
                         BIO_label[begin] = 0
                         BIO_label[begin+1 : i] = 1
                         type_label[begin : i] = type_list[j]
@@ -78,12 +82,11 @@ with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
             for i in sorted(remove_list, reverse=True):
                 del tokens[i], BIO_label[i], type_label[i]
         
-        # tokens[0] = "[CLS]"
-        if (tokens[0] == "[SEP]"):
+        if (tokens[0] == special_tokens["SEP"]):
             del tokens[0]
             if (args.mode == "train"):
                 del BIO_label[0], type_label[0]
-        tokens.append("[SEP]")
+        tokens.append(special_tokens["SEP"])
         if (args.mode == "train"):
             BIO_label.append(2)
             type_label.append(0)
@@ -98,8 +101,12 @@ with open ('./dataset/' + args.file_name + '.json', 'r') as json_file:
         bert_data.append(pt_dict)
         c += 1
         print("\rprocessed %d data" %c, end="")
-    
-torch.save(bert_data, "./dataset/" + args.file_name + "_bert_data.pt")
+
+if args.lm.find("xlnet") == -1: # BERT/RoBERTa
+    FILE_NAME = f"./dataset/{args.file_name}_bert_data.pt"
+else: # xlnet
+    FILE_NAME = f"./dataset/{args.file_name}_xlnet_data.pt"
+torch.save(bert_data, FILE_NAME)
 print("")
 
 """to length 512"""
@@ -125,7 +132,7 @@ for data in tqdm(bert_data):
         ids_512 = ids[pos : pos+512]
         count_back = 0
         for i in range(min(510, len(ids_512)-1), 0, -1):
-            if (ids_512[i] == 102): # 102 = [SEP]
+            if (ids_512[i] == tokenizer.sep_token_id): # 102 = [SEP]
                 count_back += 1
                 if (count_back == 1):
                     sep_pos = i
@@ -136,22 +143,30 @@ for data in tqdm(bert_data):
             sep_pos = 510
             new_pos = pos + 510 - 5 # overlap n tokens
 
-        ids_512 = [101] + ids[pos : pos+sep_pos+1] + [0] * (512 - sep_pos - 2)
+        # if True:
+        if args.lm.find("xlnet") == -1: # BERT/RoBERTa
+            ids_512 = [tokenizer.cls_token_id] + ids[pos : pos+sep_pos+1] + [tokenizer.pad_token_id] * (512 - sep_pos - 2) # [CLS] sentence [SEP] [PAD]
+        else: # xlnet
+            ids_512 = [tokenizer.pad_token_id] * (512 - sep_pos - 2) + ids[pos : pos+sep_pos+1] + [tokenizer.cls_token_id] # <pad> sentence <sep> <cls>
         seg_512 = [0] * 512
         if (args.seg_mode == 1):
             i = 0
             flag = 0
             while (i < 512):
-                if (ids_512[i] == tokenizer.vocab['醫'] or ids_512[i] == tokenizer.vocab['個'] \
-                    or ids_512[i] == tokenizer.vocab['護']):
+                temp = tokenizer.convert_ids_to_tokens(ids_512[i])
+                if (temp.find('醫') != -1 or temp.find('個') != -1 \
+                    or temp.find('護') != -1):
                     flag = 0
-                elif (ids_512[i] == tokenizer.vocab['民'] or ids_512[i] == tokenizer.vocab['家']):
+                elif (temp.find('民') != -1 or temp.find('家') != -1):
                     flag = 1
                 seg_512[i] = flag
                 i += 1
             
+        if args.lm.find("xlnet") == -1: # BERT/RoBERTa
+            att_512 = [1] * (sep_pos + 2) + [0] * (512 - sep_pos - 2)
+        else: # xlnet
+            att_512 = [0] * (512 - sep_pos - 2) + [1] * (sep_pos + 2)
 
-        att_512 = [1] * (sep_pos + 2) + [0] * (512 - sep_pos - 2)
         if (args.mode == "train"):
             BIO_512 = [2] + BIO[pos : pos+sep_pos+1] + [2] * (512 - sep_pos - 2)
             type_512 = [0] + type_[pos : pos+sep_pos+1] + [0] * (512 - sep_pos - 2)
@@ -178,8 +193,14 @@ for data in tqdm(bert_data):
         if (flag): # read single talk
             break
 
-torch.save(bert_data_train_512, "./dataset/" + args.file_name + "_train_512_bert_data.pt")
-torch.save(bert_data_test_512, "./dataset/" + args.file_name + "_test_512_bert_data.pt")
+if args.lm.find("xlnet") == -1: # BERT/RoBERTa
+    TRAIN_FILE_NAME = f"./dataset/{args.file_name}_train_512_bert_data.pt"
+    TEST_FILE_NAME = f"./dataset/{args.file_name}_test_512_bert_data.pt"
+else: # xlnet
+    TRAIN_FILE_NAME = f"./dataset/{args.file_name}_train_512_xlnet_data.pt"
+    TEST_FILE_NAME = f"./dataset/{args.file_name}_test_512_xlnet_data.pt"
+torch.save(bert_data_train_512,TRAIN_FILE_NAME)
+torch.save(bert_data_test_512, TEST_FILE_NAME)
 
 print("")
 print("processed %d origin datas to %d train datas and %d test datas in length 512"
